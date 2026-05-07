@@ -1257,14 +1257,14 @@
   )
   $: physicalHealthFormDayMacros = dayMacros(physicalHealthFormEntry, physicalHealthFoodsById)
   $: physicalHealthIsToday = physicalHealthFormDate === todayIsoDate()
-  $: physicalHealthCharts = ['protein', 'carbs', 'fats', 'water', 'weight'].map((metric) => {
+  $: physicalHealthCharts = ['calories', 'protein', 'carbs', 'fats', 'water', 'weight'].map((metric) => {
     const points = physicalHealthChartPoints(metric, physicalHealthScale)
     const target = physicalHealthLogs.targets[metric] || 0
     const maxValue = Math.max(...points.map((p) => p.value), target, 1)
     return {
       metric,
       label: metric === 'weight' ? 'Weight' : metric.charAt(0).toUpperCase() + metric.slice(1),
-      unit: metric === 'water' ? 'ml' : metric === 'weight' ? 'kg' : 'g',
+      unit: metric === 'water' ? 'ml' : metric === 'weight' ? 'kg' : metric === 'calories' ? 'kcal' : 'g',
       style: metric === 'weight' ? 'line' : 'bar',
       points,
       target,
@@ -1489,6 +1489,17 @@
 
   function physicalHealthChartPoints(metric, scale) {
     const range = physicalHealthDateRange(scale)
+    const lookupValue = (iso) => {
+      const entry = physicalHealthLogs.daily[iso]
+      if (!entry) return 0
+      if (metric === 'water' || metric === 'weight') {
+        return Number(entry[metric]) || 0
+      }
+      const m = dayMacros(entry, physicalHealthFoodsById)
+      if (metric === 'calories') return m.kcal
+      return m[metric] || 0
+    }
+
     if (scale === 'year') {
       return range.map((weekStart, idx) => {
         const start = new Date(weekStart)
@@ -1498,8 +1509,8 @@
           const d = new Date(start)
           d.setDate(d.getDate() + i)
           const iso = d.toISOString().slice(0, 10)
-          const value = physicalHealthLogs.daily[iso]?.[metric]
-          if (typeof value === 'number' && value > 0) {
+          const value = lookupValue(iso)
+          if (value > 0) {
             sum += value
             count++
           }
@@ -1512,8 +1523,9 @@
         }
       })
     }
+
     return range.map((iso) => {
-      const value = physicalHealthLogs.daily[iso]?.[metric] ?? 0
+      const value = lookupValue(iso)
       const date = new Date(iso)
       return {
         date: iso,
